@@ -6,4 +6,6 @@ With this application you can read and update the configuration data of CH340B.
 
 The configuration data such as Vendor ID, Product ID, Product Name, Serial Number can be read / modified and written to the CH340B chip. This application requires .Net Framework 4.7.2 or above.
 
+The source code can be compiled on Microsoft Visual Studio 2019 or above with C# .Net Framework 4.7.2 or above.
+
 This is a free and open source software provided under MIT License.
