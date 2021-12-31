@@ -8,26 +8,29 @@ namespace CH340BConfigure
 {
     public partial class Form1 : Form
     {
+        // Allocate separate buffers for Read and Write functions
         Byte[] abyReadData = new byte[1024];
         Byte[] abyWriteData = new byte[1024];
+        // Allocate a byte array buffer for using in the DeviceIoControl calls
         Byte[] abyInputBuffer = null;
         uint unBytesReturned = 0;
-
+        // Device Handle
         IntPtr pHandle = IntPtr.Zero;
-
         IntPtr pspDeviceInterfaceData = IntPtr.Zero;
         IntPtr pspDeviceInterfaceDetailData = IntPtr.Zero;
-
+        // Device Info object array that has device's user friendly name, actual COM port name
+        // This application supports multiple CH340B devices connected to the same PC's USB ports - up to 10 number of devices
         DeviceInfo[] aoDevInfo = DeviceInfo.NewInitArray(10);
         int nNumberOfDevices = 0;
+        // Device index tracking when a new device is selected in the device list combo box
         int nSelectedDeviceIndex = 0;
 
         public Form1()
         {
             InitializeComponent();
-
+            // This closing handler does nothing now
             this.FormClosing += Form1_FormClosing;
-
+            // Call the SearchAndListCh340BDevices - i.e look for devices and list them
             buttonUpdateDevList_Click(null, null);
         }
 
@@ -36,76 +39,77 @@ namespace CH340BConfigure
             
         }
 
-        internal bool GetDevices(ref DeviceInfo[] aoDevInfo, ref int m_nTotalDevices)
+        /* 
+         * Function Name: GetDevices
+         * Description: This function looks for the CH340B devices connected to the PC USB port and 
+         * get the device friendly name, COM port name, which will be used in further device opening to perform Read / Write 
+         * functions with the device.
+         * Arguments: 
+         * DeviceInfo[] - DeviceInfo object array - it will have the device info object for each device detected in the system
+         * nTotalDevices - Integer value that represents the number of devices detected in the system
+         * Return: boolean value - true if the function call is successsful, false if any error occurred
+         * The code doesn't report error as of now. It checks for error using GetLastError, but not reporting to the caller.
+         */
+        private bool GetDevices(ref DeviceInfo[] aoDevInfo, ref int nTotalDevices)
         {
+            bool bStatus = true;
             uint uintError = Constants.NO_ERROR;
             IntPtr hDevInfo = IntPtr.Zero;
-            IntPtr hDevice = IntPtr.Zero;
-            bool bStatus = true;
+            IntPtr hDevice = IntPtr.Zero;            
             uint uintDeviceID = 0;
             uint uintDataT = 0;
             uint uintBufferSize = 0;
+            // COM Port Interface Class GUID
             Guid sGuid = new Guid("86E0D1E0-8089-11D0-9CE4-08003E301F73");
             IntPtr psDeviceInfoData = IntPtr.Zero;
-
             NativeStructs.SP_DEVINFO_DATA sDeviceInfoData = new NativeStructs.SP_DEVINFO_DATA();
-
             IntPtr pPropertyBuffer = IntPtr.Zero;
-
             do
             {
                 uintError = Constants.NO_ERROR;
-                m_nTotalDevices = 0;
-
-                // Create a HDEVINFO with all the present devices of the HID Class GUID Supplied.
+                nTotalDevices = 0;
+                // Create a HDEVINFO with all the present devices of the COM Port Interface Class GUID Supplied.
                 hDevInfo = NativeMethods.SetupDiGetClassDevs(ref sGuid, IntPtr.Zero, IntPtr.Zero,
                             Constants.DIGCF_DEVICEINTERFACE | Constants.DIGCF_PRESENT);
-
-                // Custom Error handling.
+                // Validate the hDevInfo handle
                 if (Constants.INVALID_HANDLE_VALUE == hDevInfo)
                 {
                     uintError = Constants.ERROR_INVALID_HANDLE;	// (Long Pointer Value - 1)
                     bStatus = false;
                     break;
                 }
-
-                // Enumerate through all devices in the Set.
+                // Enumerate through all devices in the set
                 sDeviceInfoData.cbSize = Marshal.SizeOf(sDeviceInfoData);
-
                 // Initialize pointer for sDeviceInfoData
                 psDeviceInfoData = Marshal.AllocHGlobal(Marshal.SizeOf(sDeviceInfoData));
                 Marshal.StructureToPtr(sDeviceInfoData, psDeviceInfoData, true);
-
                 for (uintDeviceID = 0; NativeMethods.SetupDiEnumDeviceInfo(hDevInfo, uintDeviceID, psDeviceInfoData);
                     uintDeviceID++)
                 {
                     sDeviceInfoData = (NativeStructs.SP_DEVINFO_DATA)Marshal.PtrToStructure(psDeviceInfoData,
                         typeof(NativeStructs.SP_DEVINFO_DATA));
-
+                    // Get the device friendly name from the registry
                     while (!NativeMethods.SetupDiGetDeviceRegistryProperty(hDevInfo, psDeviceInfoData,
                         (uint)Constants.SPDRP.SPDRP_FRIENDLYNAME, ref uintDataT, pPropertyBuffer, uintBufferSize, ref uintBufferSize))
                     {
-                        // System Error Handling.
+                        // Check for error 
                         uintError = (uint)Marshal.GetLastWin32Error();
                         if (Constants.ERROR_INSUFFICIENT_BUFFER == uintError)
                         {
+                            // If the error is insufficient buffer, then allocate the buffer for number of bytes specified by uintBufferSize
                             pPropertyBuffer = Marshal.AllocHGlobal((int)uintBufferSize);
                         }
                         else
                         {
+                            // If the error is not ERROR_INSUFFICIENT_BUFFER, quit the loop
                             bStatus = false;
                             break;
                         }
                     }
-
                     IntPtr pDeviceName = new IntPtr(pPropertyBuffer.ToInt64());
-
                     String szDeviceName = Marshal.PtrToStringAuto(pDeviceName);
-
                     String szDevicePathName = System.String.Empty;
-
                     String szComportName = "";
-
                     try
                     {
                         szComportName = szDeviceName.Split(new char[] { '(', ')' })[1];
@@ -114,61 +118,74 @@ namespace CH340BConfigure
                     {
                         
                     }
-
                     if (string.IsNullOrEmpty(szComportName) == false)
                     {
-                        // "\\\\.\\COMn"
+                        // Form the COM Port name like this "\\\\.\\COMn"
                         string szComportNameForHandle = "\\\\.\\" + szComportName;
+                        // Check if the device detected is really CH340B or other Virtual / Real COM Port devices
                         bool bDeviceIsCh340B = CheckIfDeviceIsCh340B(szComportNameForHandle);
                         if (bDeviceIsCh340B)
                         {
-                            aoDevInfo[m_nTotalDevices].szComportName = szComportName;
-                            aoDevInfo[m_nTotalDevices].szComportNameForHandle = szComportNameForHandle;
-                            aoDevInfo[m_nTotalDevices].szDeviceName = szDeviceName;
-                            aoDevInfo[m_nTotalDevices].nDeviceIndex = m_nTotalDevices;
-                            m_nTotalDevices++;
+                            // If this is really CH340B then, store its friendly name, COM Port name
+                            // to the device info object
+                            aoDevInfo[nTotalDevices].szComportName = szComportName;
+                            aoDevInfo[nTotalDevices].szComportNameForHandle = szComportNameForHandle;
+                            aoDevInfo[nTotalDevices].szDeviceName = szDeviceName;
+                            aoDevInfo[nTotalDevices].nDeviceIndex = nTotalDevices;
+                            nTotalDevices++;
                         }
                     }
                 }
 
             } while (false);
-
             // Free the memory allocated from unmanaged memory used
             if (psDeviceInfoData != IntPtr.Zero)
             {
                 Marshal.FreeHGlobal(psDeviceInfoData);
                 psDeviceInfoData = IntPtr.Zero;
             }
-
             if (pPropertyBuffer != IntPtr.Zero)
             {
                 Marshal.FreeHGlobal(pPropertyBuffer);
                 pPropertyBuffer = IntPtr.Zero;
             }
-
+            // Destroy the device information list
             if (hDevInfo != IntPtr.Zero)
             {
                 NativeMethods.SetupDiDestroyDeviceInfoList(hDevInfo);
             }
-
             return bStatus;
         }
 
+        /* 
+         * Function Name: InitializeCh340BVendorInterface
+         * Description: This function initializes the Vendor Interface of the CH340B driver
+         * Arguments: 
+         * IntPtr - pHandle - Manged Pointer variable that represents the device handle     
+         * Return: boolean value - true if the device detected is a CH340B or else false
+         */
         private bool InitializeCh340BVendorInterface(IntPtr pHandle)
         {
             bool bResult = false;
-
             try
             {
+                // Validate the device hanlde
                 if (pHandle != IntPtr.Zero && pHandle != Constants.INVALID_HANDLE_VALUE)
                 {
+                    // CH340B uses a vendor supplied driver on Microsoft Windows, that is its not fully complaint with 
+                    // Microsoft's USB CDC driver, so the Microsoft USB CDC driver is not loaded and it requires
+                    // the vendor - chip manufacturer (WCH) supplied driver.
+                    // First the device must be informed to send the Vendor request command through Control Endpoint
+                    // The following sequence of commands are issued to the CH340B's Kernel mode driver and make the CH340B driver
+                    // to issue a vendor request through Control Endpoint to the CH340B.
+
                     // Get Serial Properties
                     NativeStructs.SERIAL_COMMPROP sSerialCompProp = new NativeStructs.SERIAL_COMMPROP();
                     IntPtr psSerialCompProp = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialCompProp));
                     Marshal.StructureToPtr(sSerialCompProp, psSerialCompProp, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_PROPERTIES, IntPtr.Zero, 0, psSerialCompProp, Marshal.SizeOf(sSerialCompProp), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_PROPERTIES, IntPtr.Zero, 0, psSerialCompProp, 
+                        Marshal.SizeOf(sSerialCompProp), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialCompProp, sSerialCompProp);
-                    //Marshal.ptrtostr
                     Marshal.FreeHGlobal(psSerialCompProp);
 
                     // Set Serial Queue size
@@ -177,15 +194,16 @@ namespace CH340BConfigure
                     sSerialQueueSize.OutSize = 0x00002000;
                     IntPtr psSerialQueueSize = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialQueueSize));
                     Marshal.StructureToPtr(sSerialQueueSize, psSerialQueueSize, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_QUEUE_SIZE, psSerialQueueSize, Marshal.SizeOf(sSerialQueueSize), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialQueueSize, sSerialQueueSize);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_QUEUE_SIZE, psSerialQueueSize, 
+                        Marshal.SizeOf(sSerialQueueSize), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialQueueSize);
 
                     // Get Serial TimeOuts
                     NativeStructs.SERIAL_TIMEOUTS sSerialTimeOuts = new NativeStructs.SERIAL_TIMEOUTS();
                     IntPtr psSerialTimeOuts = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialTimeOuts));
                     Marshal.StructureToPtr(sSerialTimeOuts, psSerialTimeOuts, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_TIMEOUTS, IntPtr.Zero, 0, psSerialTimeOuts, Marshal.SizeOf(sSerialTimeOuts), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_TIMEOUTS, IntPtr.Zero, 0, psSerialTimeOuts, 
+                        Marshal.SizeOf(sSerialTimeOuts), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialTimeOuts, sSerialTimeOuts);
                     Marshal.FreeHGlobal(psSerialTimeOuts);
 
@@ -198,20 +216,22 @@ namespace CH340BConfigure
                     sSerialTimeOuts.WriteTotalTimeoutConstant = 0x000001F4;
                     psSerialTimeOuts = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialTimeOuts));
                     Marshal.StructureToPtr(sSerialTimeOuts, psSerialTimeOuts, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_TIMEOUTS, psSerialTimeOuts, Marshal.SizeOf(sSerialTimeOuts), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialTimeOuts, sSerialTimeOuts);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_TIMEOUTS, psSerialTimeOuts, 
+                        Marshal.SizeOf(sSerialTimeOuts), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialTimeOuts);
 
                     // Issue Serial Purge
                     abyInputBuffer = new byte[4];
                     abyInputBuffer[0] = 0x0F;
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_PURGE, abyInputBuffer, abyInputBuffer.Length, IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_PURGE, abyInputBuffer, abyInputBuffer.Length, 
+                        IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
 
                     // Get Serial Baudrate
                     NativeStructs.SERIAL_BAUD_RATE sSerialBaudRate = new NativeStructs.SERIAL_BAUD_RATE();
                     IntPtr psSerialBaudRate = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialBaudRate));
                     Marshal.StructureToPtr(sSerialBaudRate, psSerialBaudRate, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_BAUD_RATE, IntPtr.Zero, 0, psSerialBaudRate, Marshal.SizeOf(sSerialBaudRate), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_BAUD_RATE, IntPtr.Zero, 0, psSerialBaudRate, 
+                        Marshal.SizeOf(sSerialBaudRate), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialBaudRate, sSerialBaudRate);
                     Marshal.FreeHGlobal(psSerialBaudRate);
 
@@ -219,7 +239,8 @@ namespace CH340BConfigure
                     NativeStructs.SERIAL_LINE_CONTROL sSerialLineControl = new NativeStructs.SERIAL_LINE_CONTROL();
                     IntPtr psSerialLineControl = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialLineControl));
                     Marshal.StructureToPtr(sSerialLineControl, psSerialLineControl, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_LINE_CONTROL, IntPtr.Zero, 0, psSerialLineControl, Marshal.SizeOf(sSerialLineControl), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_LINE_CONTROL, IntPtr.Zero, 0, psSerialLineControl, 
+                        Marshal.SizeOf(sSerialLineControl), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialLineControl, sSerialLineControl);
                     Marshal.FreeHGlobal(psSerialLineControl);
 
@@ -227,7 +248,8 @@ namespace CH340BConfigure
                     NativeStructs.SERIAL_CHARS sSerialChars = new NativeStructs.SERIAL_CHARS();
                     IntPtr psSerialChars = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialChars));
                     Marshal.StructureToPtr(sSerialChars, psSerialChars, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_CHARS, IntPtr.Zero, 0, psSerialChars, Marshal.SizeOf(sSerialChars), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_CHARS, IntPtr.Zero, 0, psSerialChars, 
+                        Marshal.SizeOf(sSerialChars), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialChars, sSerialChars);
                     Marshal.FreeHGlobal(psSerialChars);
 
@@ -235,7 +257,8 @@ namespace CH340BConfigure
                     NativeStructs.SERIAL_HANDFLOW sSerialHandFlow = new NativeStructs.SERIAL_HANDFLOW();
                     IntPtr psSerialHandFlow = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialHandFlow));
                     Marshal.StructureToPtr(sSerialHandFlow, psSerialHandFlow, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_HANDFLOW, IntPtr.Zero, 0, psSerialHandFlow, Marshal.SizeOf(sSerialHandFlow), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_HANDFLOW, IntPtr.Zero, 0, psSerialHandFlow, 
+                        Marshal.SizeOf(sSerialHandFlow), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialHandFlow, sSerialHandFlow);
                     Marshal.FreeHGlobal(psSerialHandFlow);
 
@@ -243,7 +266,8 @@ namespace CH340BConfigure
                     sSerialBaudRate = new NativeStructs.SERIAL_BAUD_RATE();
                     psSerialBaudRate = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialBaudRate));
                     Marshal.StructureToPtr(sSerialBaudRate, psSerialBaudRate, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_BAUD_RATE, IntPtr.Zero, 0, psSerialBaudRate, Marshal.SizeOf(sSerialBaudRate), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_BAUD_RATE, IntPtr.Zero, 0, psSerialBaudRate, 
+                        Marshal.SizeOf(sSerialBaudRate), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialBaudRate, sSerialBaudRate);
                     Marshal.FreeHGlobal(psSerialBaudRate);
 
@@ -251,7 +275,8 @@ namespace CH340BConfigure
                     sSerialLineControl = new NativeStructs.SERIAL_LINE_CONTROL();
                     psSerialLineControl = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialLineControl));
                     Marshal.StructureToPtr(sSerialLineControl, psSerialLineControl, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_LINE_CONTROL, IntPtr.Zero, 0, psSerialLineControl, Marshal.SizeOf(sSerialLineControl), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_LINE_CONTROL, IntPtr.Zero, 0, psSerialLineControl, 
+                        Marshal.SizeOf(sSerialLineControl), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialLineControl, sSerialLineControl);
                     Marshal.FreeHGlobal(psSerialLineControl);
 
@@ -259,7 +284,8 @@ namespace CH340BConfigure
                     sSerialChars = new NativeStructs.SERIAL_CHARS();
                     psSerialChars = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialChars));
                     Marshal.StructureToPtr(sSerialChars, psSerialChars, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_CHARS, IntPtr.Zero, 0, psSerialChars, Marshal.SizeOf(sSerialChars), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_CHARS, IntPtr.Zero, 0, psSerialChars, 
+                        Marshal.SizeOf(sSerialChars), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialChars, sSerialChars);
                     Marshal.FreeHGlobal(psSerialChars);
 
@@ -267,7 +293,8 @@ namespace CH340BConfigure
                     sSerialHandFlow = new NativeStructs.SERIAL_HANDFLOW();
                     psSerialHandFlow = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialHandFlow));
                     Marshal.StructureToPtr(sSerialHandFlow, psSerialHandFlow, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_HANDFLOW, IntPtr.Zero, 0, psSerialHandFlow, Marshal.SizeOf(sSerialHandFlow), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_HANDFLOW, IntPtr.Zero, 0, psSerialHandFlow, 
+                        Marshal.SizeOf(sSerialHandFlow), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialHandFlow, sSerialHandFlow);
                     Marshal.FreeHGlobal(psSerialHandFlow);
 
@@ -276,15 +303,17 @@ namespace CH340BConfigure
                     sSerialBaudRate.BaudRate = 300;
                     psSerialBaudRate = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialBaudRate));
                     Marshal.StructureToPtr(sSerialBaudRate, psSerialBaudRate, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_BAUD_RATE, psSerialBaudRate, Marshal.SizeOf(sSerialBaudRate), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialBaudRate, sSerialBaudRate);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_BAUD_RATE, psSerialBaudRate, 
+                        Marshal.SizeOf(sSerialBaudRate), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialBaudRate);
 
                     // Set Serial RTS
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_RTS, IntPtr.Zero, 0, IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_RTS, IntPtr.Zero, 0, 
+                        IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
 
                     // Set Serial DTR
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_DTR, IntPtr.Zero, 0, IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_DTR, IntPtr.Zero, 0, 
+                        IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
 
                     // Set Serial Line control
                     sSerialLineControl = new NativeStructs.SERIAL_LINE_CONTROL();
@@ -293,8 +322,8 @@ namespace CH340BConfigure
                     sSerialLineControl.WordLength = 0x08;
                     psSerialLineControl = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialLineControl));
                     Marshal.StructureToPtr(sSerialLineControl, psSerialLineControl, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_LINE_CONTROL, psSerialLineControl, Marshal.SizeOf(sSerialLineControl), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialLineControl, sSerialLineControl);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_LINE_CONTROL, 
+                        psSerialLineControl, Marshal.SizeOf(sSerialLineControl), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialLineControl);
 
                     // Set Serial CHARS
@@ -307,8 +336,8 @@ namespace CH340BConfigure
                     sSerialChars.XoffChar = 0x13;
                     psSerialChars = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialChars));
                     Marshal.StructureToPtr(sSerialChars, psSerialChars, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_CHARS, psSerialChars, Marshal.SizeOf(sSerialChars), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialChars, sSerialChars);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_CHARS, psSerialChars, 
+                        Marshal.SizeOf(sSerialChars), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialChars);
 
                     // Set Serial Handflow
@@ -319,8 +348,8 @@ namespace CH340BConfigure
                     sSerialHandFlow.XoffLimit = 0x000021B0;
                     psSerialHandFlow = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialHandFlow));
                     Marshal.StructureToPtr(sSerialHandFlow, psSerialHandFlow, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_HANDFLOW, psSerialHandFlow, Marshal.SizeOf(sSerialHandFlow), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialHandFlow, sSerialHandFlow);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_HANDFLOW, psSerialHandFlow, 
+                        Marshal.SizeOf(sSerialHandFlow), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialHandFlow);                    
                 }
             }
@@ -332,25 +361,32 @@ namespace CH340BConfigure
             return bResult;
         }
 
+        /* 
+         * Function Name: CheckIfDeviceIsCh340B
+         * Description: This function checks whether the detected device is a CH340B or other COM port devices
+         * Arguments: 
+         * IntPtr - pHandle - Managed Pointer variable that represents the device handle     
+         * Return: boolean value - true if the device detected is a CH340B or else false
+         */
         private bool CheckIfDeviceIsCh340B(string szComportName)
         {
             bool bResult = false;
             bool bDeviceIsCh340B = false;
-
             try
             {
+                // Open the device using the COM Port Name in the format "\\\\.\\COMn"
                 pHandle = NativeMethods.CreateFile(szComportName, Constants.GENERIC_READ | Constants.GENERIC_WRITE,
                     Constants.FILE_SHARE_READ | Constants.FILE_SHARE_WRITE, IntPtr.Zero, Constants.OPEN_EXISTING, 0, IntPtr.Zero);
-
                 if (pHandle != IntPtr.Zero && pHandle != Constants.INVALID_HANDLE_VALUE)
                 {
+                    // Initialize the vendor interface
                     // Get Serial Properties
                     NativeStructs.SERIAL_COMMPROP sSerialCompProp = new NativeStructs.SERIAL_COMMPROP();
                     IntPtr psSerialCompProp = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialCompProp));
                     Marshal.StructureToPtr(sSerialCompProp, psSerialCompProp, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_PROPERTIES, IntPtr.Zero, 0, psSerialCompProp, Marshal.SizeOf(sSerialCompProp), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_PROPERTIES, IntPtr.Zero, 0, psSerialCompProp,
+                        Marshal.SizeOf(sSerialCompProp), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialCompProp, sSerialCompProp);
-                    //Marshal.ptrtostr
                     Marshal.FreeHGlobal(psSerialCompProp);
 
                     // Set Serial Queue size
@@ -359,15 +395,16 @@ namespace CH340BConfigure
                     sSerialQueueSize.OutSize = 0x00002000;
                     IntPtr psSerialQueueSize = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialQueueSize));
                     Marshal.StructureToPtr(sSerialQueueSize, psSerialQueueSize, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_QUEUE_SIZE, psSerialQueueSize, Marshal.SizeOf(sSerialQueueSize), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialQueueSize, sSerialQueueSize);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_QUEUE_SIZE, psSerialQueueSize, 
+                        Marshal.SizeOf(sSerialQueueSize), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialQueueSize);
 
                     // Get Serial TimeOuts
                     NativeStructs.SERIAL_TIMEOUTS sSerialTimeOuts = new NativeStructs.SERIAL_TIMEOUTS();
                     IntPtr psSerialTimeOuts = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialTimeOuts));
                     Marshal.StructureToPtr(sSerialTimeOuts, psSerialTimeOuts, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_TIMEOUTS, IntPtr.Zero, 0, psSerialTimeOuts, Marshal.SizeOf(sSerialTimeOuts), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_TIMEOUTS, IntPtr.Zero, 0, psSerialTimeOuts, 
+                        Marshal.SizeOf(sSerialTimeOuts), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialTimeOuts, sSerialTimeOuts);
                     Marshal.FreeHGlobal(psSerialTimeOuts);
 
@@ -380,20 +417,22 @@ namespace CH340BConfigure
                     sSerialTimeOuts.WriteTotalTimeoutConstant = 0x000001F4;
                     psSerialTimeOuts = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialTimeOuts));
                     Marshal.StructureToPtr(sSerialTimeOuts, psSerialTimeOuts, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_TIMEOUTS, psSerialTimeOuts, Marshal.SizeOf(sSerialTimeOuts), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialTimeOuts, sSerialTimeOuts);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_TIMEOUTS, psSerialTimeOuts, 
+                        Marshal.SizeOf(sSerialTimeOuts), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialTimeOuts);
 
                     // Issue Serial Purge
                     abyInputBuffer = new byte[4];
                     abyInputBuffer[0] = 0x0F;
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_PURGE, abyInputBuffer, abyInputBuffer.Length, IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_PURGE, abyInputBuffer, abyInputBuffer.Length, 
+                        IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
 
                     // Get Serial Baudrate
                     NativeStructs.SERIAL_BAUD_RATE sSerialBaudRate = new NativeStructs.SERIAL_BAUD_RATE();
                     IntPtr psSerialBaudRate = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialBaudRate));
                     Marshal.StructureToPtr(sSerialBaudRate, psSerialBaudRate, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_BAUD_RATE, IntPtr.Zero, 0, psSerialBaudRate, Marshal.SizeOf(sSerialBaudRate), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_BAUD_RATE, IntPtr.Zero, 0, psSerialBaudRate, 
+                        Marshal.SizeOf(sSerialBaudRate), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialBaudRate, sSerialBaudRate);
                     Marshal.FreeHGlobal(psSerialBaudRate);
 
@@ -401,7 +440,8 @@ namespace CH340BConfigure
                     NativeStructs.SERIAL_LINE_CONTROL sSerialLineControl = new NativeStructs.SERIAL_LINE_CONTROL();
                     IntPtr psSerialLineControl = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialLineControl));
                     Marshal.StructureToPtr(sSerialLineControl, psSerialLineControl, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_LINE_CONTROL, IntPtr.Zero, 0, psSerialLineControl, Marshal.SizeOf(sSerialLineControl), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_LINE_CONTROL, IntPtr.Zero, 0, psSerialLineControl, 
+                        Marshal.SizeOf(sSerialLineControl), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialLineControl, sSerialLineControl);
                     Marshal.FreeHGlobal(psSerialLineControl);
 
@@ -409,7 +449,8 @@ namespace CH340BConfigure
                     NativeStructs.SERIAL_CHARS sSerialChars = new NativeStructs.SERIAL_CHARS();
                     IntPtr psSerialChars = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialChars));
                     Marshal.StructureToPtr(sSerialChars, psSerialChars, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_CHARS, IntPtr.Zero, 0, psSerialChars, Marshal.SizeOf(sSerialChars), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_CHARS, IntPtr.Zero, 0, psSerialChars, 
+                        Marshal.SizeOf(sSerialChars), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialChars, sSerialChars);
                     Marshal.FreeHGlobal(psSerialChars);
 
@@ -417,7 +458,8 @@ namespace CH340BConfigure
                     NativeStructs.SERIAL_HANDFLOW sSerialHandFlow = new NativeStructs.SERIAL_HANDFLOW();
                     IntPtr psSerialHandFlow = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialHandFlow));
                     Marshal.StructureToPtr(sSerialHandFlow, psSerialHandFlow, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_HANDFLOW, IntPtr.Zero, 0, psSerialHandFlow, Marshal.SizeOf(sSerialHandFlow), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_HANDFLOW, IntPtr.Zero, 0, psSerialHandFlow, 
+                        Marshal.SizeOf(sSerialHandFlow), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialHandFlow, sSerialHandFlow);
                     Marshal.FreeHGlobal(psSerialHandFlow);
 
@@ -425,7 +467,8 @@ namespace CH340BConfigure
                     sSerialBaudRate = new NativeStructs.SERIAL_BAUD_RATE();
                     psSerialBaudRate = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialBaudRate));
                     Marshal.StructureToPtr(sSerialBaudRate, psSerialBaudRate, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_BAUD_RATE, IntPtr.Zero, 0, psSerialBaudRate, Marshal.SizeOf(sSerialBaudRate), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_BAUD_RATE, IntPtr.Zero, 0, psSerialBaudRate, 
+                        Marshal.SizeOf(sSerialBaudRate), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialBaudRate, sSerialBaudRate);
                     Marshal.FreeHGlobal(psSerialBaudRate);
 
@@ -433,7 +476,8 @@ namespace CH340BConfigure
                     sSerialLineControl = new NativeStructs.SERIAL_LINE_CONTROL();
                     psSerialLineControl = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialLineControl));
                     Marshal.StructureToPtr(sSerialLineControl, psSerialLineControl, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_LINE_CONTROL, IntPtr.Zero, 0, psSerialLineControl, Marshal.SizeOf(sSerialLineControl), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_LINE_CONTROL, IntPtr.Zero, 0, psSerialLineControl, 
+                        Marshal.SizeOf(sSerialLineControl), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialLineControl, sSerialLineControl);
                     Marshal.FreeHGlobal(psSerialLineControl);
 
@@ -441,7 +485,8 @@ namespace CH340BConfigure
                     sSerialChars = new NativeStructs.SERIAL_CHARS();
                     psSerialChars = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialChars));
                     Marshal.StructureToPtr(sSerialChars, psSerialChars, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_CHARS, IntPtr.Zero, 0, psSerialChars, Marshal.SizeOf(sSerialChars), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_CHARS, IntPtr.Zero, 0, psSerialChars, 
+                        Marshal.SizeOf(sSerialChars), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialChars, sSerialChars);
                     Marshal.FreeHGlobal(psSerialChars);
 
@@ -449,7 +494,8 @@ namespace CH340BConfigure
                     sSerialHandFlow = new NativeStructs.SERIAL_HANDFLOW();
                     psSerialHandFlow = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialHandFlow));
                     Marshal.StructureToPtr(sSerialHandFlow, psSerialHandFlow, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_HANDFLOW, IntPtr.Zero, 0, psSerialHandFlow, Marshal.SizeOf(sSerialHandFlow), out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_GET_HANDFLOW, IntPtr.Zero, 0, psSerialHandFlow, 
+                        Marshal.SizeOf(sSerialHandFlow), out unBytesReturned, IntPtr.Zero);
                     Marshal.PtrToStructure(psSerialHandFlow, sSerialHandFlow);
                     Marshal.FreeHGlobal(psSerialHandFlow);
 
@@ -458,15 +504,17 @@ namespace CH340BConfigure
                     sSerialBaudRate.BaudRate = 300;
                     psSerialBaudRate = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialBaudRate));
                     Marshal.StructureToPtr(sSerialBaudRate, psSerialBaudRate, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_BAUD_RATE, psSerialBaudRate, Marshal.SizeOf(sSerialBaudRate), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialBaudRate, sSerialBaudRate);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_BAUD_RATE, psSerialBaudRate, 
+                        Marshal.SizeOf(sSerialBaudRate), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialBaudRate);
 
                     // Set Serial RTS
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_RTS, IntPtr.Zero, 0, IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_RTS, IntPtr.Zero, 0, IntPtr.Zero, 
+                        0, out unBytesReturned, IntPtr.Zero);
 
                     // Set Serial DTR
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_DTR, IntPtr.Zero, 0, IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_DTR, IntPtr.Zero, 0, IntPtr.Zero, 
+                        0, out unBytesReturned, IntPtr.Zero);
 
                     // Set Serial Line control
                     sSerialLineControl = new NativeStructs.SERIAL_LINE_CONTROL();
@@ -475,8 +523,8 @@ namespace CH340BConfigure
                     sSerialLineControl.WordLength = 0x08;
                     psSerialLineControl = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialLineControl));
                     Marshal.StructureToPtr(sSerialLineControl, psSerialLineControl, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_LINE_CONTROL, psSerialLineControl, Marshal.SizeOf(sSerialLineControl), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialLineControl, sSerialLineControl);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_LINE_CONTROL, psSerialLineControl, 
+                        Marshal.SizeOf(sSerialLineControl), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialLineControl);
 
                     // Set Serial CHARS
@@ -489,8 +537,8 @@ namespace CH340BConfigure
                     sSerialChars.XoffChar = 0x13;
                     psSerialChars = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialChars));
                     Marshal.StructureToPtr(sSerialChars, psSerialChars, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_CHARS, psSerialChars, Marshal.SizeOf(sSerialChars), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialChars, sSerialChars);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_CHARS, psSerialChars, 
+                        Marshal.SizeOf(sSerialChars), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialChars);
 
                     // Set Serial Handflow
@@ -501,10 +549,11 @@ namespace CH340BConfigure
                     sSerialHandFlow.XoffLimit = 0x000021B0;
                     psSerialHandFlow = Marshal.AllocHGlobal(Marshal.SizeOf(sSerialHandFlow));
                     Marshal.StructureToPtr(sSerialHandFlow, psSerialHandFlow, false);
-                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_HANDFLOW, psSerialHandFlow, Marshal.SizeOf(sSerialHandFlow), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
-                    // Marshal.PtrToStructure(psSerialHandFlow, sSerialHandFlow);
+                    bResult = NativeMethods.DeviceIoControl(pHandle, Constants.IOCTL_SERIAL_SET_HANDFLOW, psSerialHandFlow, 
+                        Marshal.SizeOf(sSerialHandFlow), IntPtr.Zero, 0, out unBytesReturned, IntPtr.Zero);
                     Marshal.FreeHGlobal(psSerialHandFlow);
 
+                    // The magic value 0x43485523 is returned in the unsigned integer ProvSpec2 of Serial Comm Prop structure by the CH340B driver
                     if (sSerialCompProp.ProvSpec2 == 0x43485523)
                     {
                         // Device is CH340B
@@ -516,25 +565,26 @@ namespace CH340BConfigure
             {
 
             }
-
+            // Close the device handle
             if (pHandle != IntPtr.Zero && pHandle != Constants.INVALID_HANDLE_VALUE)
             {
                 NativeMethods.CloseHandle(pHandle);
             }
-
             return bDeviceIsCh340B;
         }
 
-
+        /* 
+         * Function Name: buttonUpdateDevList_Click
+         * Description: UpdateDevList button click event handler
+         */
         private void buttonUpdateDevList_Click(object sender, EventArgs e)
         {
+            // Init the ui contorls state
             buttonUpdateDevList.Enabled = false;
             groupBoxConfigControls.Enabled = false;
-
+            // Look for the CH340B devices and list them on the device list combo box
             SearchAndListCh340BDevices();
-
             buttonUpdateDevList.Enabled = true;
-
             if (nNumberOfDevices > 0)
             {
                 groupBoxConfigControls.Enabled = true;                
@@ -543,19 +593,19 @@ namespace CH340BConfigure
             {
                 groupBoxConfigControls.Enabled = false;
             }
-
             labelStatus.Text = "";
         }
 
+        /* 
+         * Function Name: SearchAndListCh340BDevices
+         * Description: This function detects the CH340B devices and list them on the combo boxes
+         */
         private void SearchAndListCh340BDevices()
         {
             // If there is already a list of devices, free the list of device and resources allocated
             comboBoxDeviceList.Items.Clear();
-
             // Look for the CH340B devices connected to the System
-
             bool bResult = GetDevices(ref aoDevInfo, ref nNumberOfDevices);
-
             if (nNumberOfDevices > 0)
             {
                // Add the CH340B devices detected to the combobox
@@ -563,45 +613,47 @@ namespace CH340BConfigure
                 {
                     comboBoxDeviceList.Items.Insert(i, aoDevInfo[i].szDeviceName);
                 }
-
                 comboBoxDeviceList.SelectedIndex = 0;
                 nSelectedDeviceIndex = 0;
             }
         }
 
+        /* 
+         * Function Name: comboBoxDeviceList_SelectedIndexChanged
+         * Description: This function is the Combobox Device List index changed handler
+         */
         private void comboBoxDeviceList_SelectedIndexChanged(object sender, EventArgs e)
         {
+            // Store the selected index to the device index variable
             nSelectedDeviceIndex = comboBoxDeviceList.SelectedIndex;
         }
 
+        /* 
+        * Function Name: buttonRead_Click
+        * Description: This function is buttonRead click event handler
+        */
         private void buttonRead_Click(object sender, EventArgs e)
         {
             bool bResult = false;
-
             buttonRead.Enabled = false;
-
             textBoxVid.Text = "";
             textBoxPid.Text = "";
             textBoxProductString.Text = "";
             textBoxSerialNumber.Text = "";
-
             try
             {
                 labelStatus.Text = "";
-
+                // Open the device handle
                 pHandle = NativeMethods.CreateFile(aoDevInfo[nSelectedDeviceIndex].szComportNameForHandle, Constants.GENERIC_READ | Constants.GENERIC_WRITE,
                     Constants.FILE_SHARE_READ | Constants.FILE_SHARE_WRITE, IntPtr.Zero, Constants.OPEN_EXISTING, 0, IntPtr.Zero);
-
-
                 if (pHandle == IntPtr.Zero || pHandle == Constants.INVALID_HANDLE_VALUE)
                 {
                     MessageBox.Show("Can't open device for reading configuration data.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                     buttonRead.Enabled = true;
                     return;
                 }
-
+                // Initialize the vendor interface of the CH340B driver
                 InitializeCh340BVendorInterface(pHandle);
-
                 // Read USB Vendor ID
                 // Read the E2PROM location 0x04 and 0x05
                 ushort ushVID = 0x0000;
@@ -615,9 +667,7 @@ namespace CH340BConfigure
                 bResult = NativeMethods.WriteFile(pHandle, abyWriteData, (uint)abyWriteData.Length, ref unBytesReturned, IntPtr.Zero);
                 bResult = NativeMethods.ReadFile(pHandle, abyReadData, 1, ref unBytesReturned, IntPtr.Zero);
                 ushVIDMSB = abyReadData[0];
-
                 ushVID = (ushort)((ushVIDMSB << 8) | ushVIDLSB);
-
                 textBoxVid.Text = ushVID.ToString("X4");
 
                 // Read USB Product ID
@@ -633,9 +683,7 @@ namespace CH340BConfigure
                 bResult = NativeMethods.WriteFile(pHandle, abyWriteData, (uint)abyWriteData.Length, ref unBytesReturned, IntPtr.Zero);
                 bResult = NativeMethods.ReadFile(pHandle, abyReadData, 1, ref unBytesReturned, IntPtr.Zero);
                 ushPIDMSB = abyReadData[0];
-
                 ushPID = (ushort)((ushPIDMSB << 8) | ushPIDLSB);
-
                 textBoxPid.Text = ushPID.ToString("X4");
 
                 // Read USB Product String
@@ -643,7 +691,6 @@ namespace CH340BConfigure
                 abyWriteData = new byte[4] { 0x40, 0xA1, 0x1A, 0x00 };
                 bResult = NativeMethods.WriteFile(pHandle, abyWriteData, (uint)abyWriteData.Length, ref unBytesReturned, IntPtr.Zero);
                 bResult = NativeMethods.ReadFile(pHandle, abyReadData, 1, ref unBytesReturned, IntPtr.Zero);
-
                 byte byUnicodeStringLength = abyReadData[0];
 
                 // Read the E2PROM location 0x1B
@@ -666,14 +713,12 @@ namespace CH340BConfigure
 
                 // Perform the conversion from one encoding to the other.
                 byte[] abyAsciiProductString = Encoding.Convert(Encoding.Unicode, Encoding.UTF8, abyUnicodeProductString, 0, byUnicodeStringLength - 2);
-
                 // Convert the new byte[] into a char[] and then into a string.
                 // This is a slightly different approach to converting to illustrate
                 // the use of GetCharCount/GetChars.
                 char[] asciiChars = new char[Encoding.UTF8.GetCharCount(abyAsciiProductString, 0, abyAsciiProductString.Length)];
                 Encoding.UTF8.GetChars(abyAsciiProductString, 0, abyAsciiProductString.Length, asciiChars, 0);
                 string asciiProductString = new string(asciiChars);
-
                 textBoxProductString.Text = asciiProductString.ToString();
 
                 // Read USB Serial Number
@@ -682,14 +727,13 @@ namespace CH340BConfigure
                 i = 0x10;
                 byte[] abyAsciiSerialNumberString = new byte[8];
                 nIndex = 0;
-                for (; i <= 0x17; i++)
+                for (; i <= 0x17; i++)  // 0x17 is the last EEPROM location to access
                 {
                     abyWriteData = new byte[4] { 0x40, 0xA1, i, 0x00 };
                     bResult = NativeMethods.WriteFile(pHandle, abyWriteData, (uint)abyWriteData.Length, ref unBytesReturned, IntPtr.Zero);
                     bResult = NativeMethods.ReadFile(pHandle, abyReadData, 1, ref unBytesReturned, IntPtr.Zero);
                     abyAsciiSerialNumberString[nIndex++] = abyReadData[0];
                 }
-
                 if (abyAsciiSerialNumberString[0] > 0x21 && abyAsciiSerialNumberString[0] < 0x7F)
                 {
                     asciiChars = new char[Encoding.ASCII.GetCharCount(abyAsciiSerialNumberString, 0, abyAsciiSerialNumberString.Length)];
@@ -702,7 +746,7 @@ namespace CH340BConfigure
             {
 
             }
-
+            // Update the Read status
             if (bResult)
             {
                 labelStatus.Text = "Status: Read Success";
@@ -711,7 +755,6 @@ namespace CH340BConfigure
             {
                 labelStatus.Text = "Status: Read Failed";
             }
-
             try
             {
                 if (pHandle != IntPtr.Zero && pHandle != Constants.INVALID_HANDLE_VALUE)
@@ -723,23 +766,22 @@ namespace CH340BConfigure
             {
 
             }
-
             buttonRead.Enabled = true;
         }
 
+        /* 
+        * Function Name: buttonWrite_Click
+        * Description: This function is buttonWrite click event handler
+        */
         private void buttonWrite_Click(object sender, EventArgs e)
         {
             ushort ushVID = 0x0000;
             ushort ushPID = 0x0000;
             string szProductString = "";
             string szSerialNumber = "";
-
             bool bResult = false;
-
             labelStatus.Text = "";
-
             buttonWrite.Enabled = false;
-
             do
             {
                 // Validate VID
@@ -812,20 +854,17 @@ namespace CH340BConfigure
 
                 try
                 {
+                    // Open device handle
                     pHandle = NativeMethods.CreateFile(aoDevInfo[nSelectedDeviceIndex].szComportNameForHandle, Constants.GENERIC_READ | Constants.GENERIC_WRITE,
                         Constants.FILE_SHARE_READ | Constants.FILE_SHARE_WRITE, IntPtr.Zero, Constants.OPEN_EXISTING, 0, IntPtr.Zero);
-
                     if (pHandle == IntPtr.Zero || pHandle == Constants.INVALID_HANDLE_VALUE)
                     {
                         MessageBox.Show("Can't open device for writing configuration data.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                         break;
                     }
-
                     InitializeCh340BVendorInterface(pHandle);
-
                     abyWriteData = new byte[4] { 0x40, 0xA0, 0x00, 0x5B };
                     bResult = NativeMethods.WriteFile(pHandle, abyWriteData, (uint)abyWriteData.Length, ref unBytesReturned, IntPtr.Zero);
-
                     // all the values are now validated
 
                     // Write VID to EEPROM 0x04 (LSB) and 0x05 (MSB)
@@ -910,9 +949,9 @@ namespace CH340BConfigure
                 {
 
                 }
-
                 try
                 {
+                    // Close the device handle
                     if (pHandle != IntPtr.Zero && pHandle != Constants.INVALID_HANDLE_VALUE)
                     {
                         NativeMethods.CloseHandle(pHandle);
@@ -925,6 +964,7 @@ namespace CH340BConfigure
 
             } while (false);
 
+            // Update the Write status
             if (bResult)
             {
                 labelStatus.Text = "Status: Write Success";
