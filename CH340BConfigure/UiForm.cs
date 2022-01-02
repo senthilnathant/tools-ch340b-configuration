@@ -149,7 +149,8 @@ namespace CH340BConfigure
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                    MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
             }            
             
             buttonRead.Enabled = true;
@@ -179,7 +180,8 @@ namespace CH340BConfigure
                 }
                 catch (Exception)
                 {
-                    MessageBox.Show("Enter valid value for Vendor ID in hex.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                    MessageBox.Show("Enter valid value for Vendor ID in hex.", "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                        MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                     break;
                 }
 
@@ -191,7 +193,8 @@ namespace CH340BConfigure
                 }
                 catch (Exception)
                 {
-                    MessageBox.Show("Enter valid value for Product ID in hex.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                    MessageBox.Show("Enter valid value for Product ID in hex.", "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                        MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                     break;
                 }
 
@@ -201,13 +204,15 @@ namespace CH340BConfigure
                     szProductString = textBoxProductString.Text;
                     if (string.IsNullOrEmpty(szProductString))
                     {
-                        MessageBox.Show("Enter valid string value for Product String.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                        MessageBox.Show("Enter valid string value for Product String.", "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                            MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                         break;
                     }
                 }
                 catch (Exception)
                 {
-                    MessageBox.Show("Enter valid string value for Product String.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                    MessageBox.Show("Enter valid string value for Product String.", "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                        MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                     break;
                 }
 
@@ -221,13 +226,15 @@ namespace CH340BConfigure
 
                         for (int i = 0; i < abySerialNumber.Length; i++)
                         {
-                            if ((abySerialNumber[i] >= 0x30 && abySerialNumber[i] <= 0x39) || (abySerialNumber[i] >= 0x41 && abySerialNumber[i] <= 0x5A) || (abySerialNumber[i] >= 0x61 && abySerialNumber[i] <= 0x7A))
+                            if ((abySerialNumber[i] >= 0x30 && abySerialNumber[i] <= 0x39) || (abySerialNumber[i] >= 0x41 && abySerialNumber[i] <= 0x5A) || 
+                                (abySerialNumber[i] >= 0x61 && abySerialNumber[i] <= 0x7A))
                             {
                                 // Valid serial number string
                             }
                             else
                             {
-                                MessageBox.Show("Enter valid string value for Serial Number.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                                MessageBox.Show("Enter valid string value for Serial Number.", "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                                    MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                                 break;
                             }
                         }
@@ -235,7 +242,8 @@ namespace CH340BConfigure
                 }
                 catch (Exception)
                 {
-                    MessageBox.Show("Enter valid string value for Product String.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                    MessageBox.Show("Enter valid string value for Product String.", "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                        MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                     break;
                 }
 
@@ -261,8 +269,4 @@ namespace CH340BConfigure
             buttonWrite.Enabled = true;
         }
     }
-
-    
-
-    
 }
