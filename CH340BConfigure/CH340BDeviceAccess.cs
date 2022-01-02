@@ -82,7 +82,8 @@ namespace CH340BConfigure
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                    MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
             }
             return nNumberOfDevices;
         }
