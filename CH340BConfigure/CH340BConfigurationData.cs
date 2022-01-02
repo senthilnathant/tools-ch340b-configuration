@@ -15,9 +15,9 @@
 //
 // History
 //
-// Date			        Version		Author		                Changes
+// Date			            Version		Author		                Changes
 //
-// ‎02 January, ‎2022   	1.0.0		SENTHILNATHAN THANGAVEL		Initial version
+// ‎02 January, ‎2022   		1.0.0		SENTHILNATHAN THANGAVEL		Initial version
 //
 // *********************************************************************************************************
 namespace CH340BConfigure

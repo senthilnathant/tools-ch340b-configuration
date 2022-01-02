@@ -32,7 +32,8 @@ namespace CH340BConfigure
     public class CH340BDeviceAccess
     {
         // Device Info object array that has device's user friendly name, actual COM port name
-        // This application supports multiple CH340B devices connected to the same PC's USB ports - up to 10 number of devices
+        // This application supports multiple CH340B devices connected to the same PC's USB ports -
+        // up to 10 number of devices
         internal DeviceInfo[] aoDevInfo = DeviceInfo.NewInitArray(10);
 
         // Allocate separate buffers for Read and Write functions
@@ -163,7 +164,8 @@ namespace CH340BConfigure
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                        MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                            MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                     }
                     if (string.IsNullOrEmpty(szComportName) == false)
                     {
@@ -205,12 +207,12 @@ namespace CH340BConfigure
         }
 
         /* 
- * Function Name: CheckIfDeviceIsCh340B
- * Description: This function checks whether the detected device is a CH340B or other COM port devices
- * Arguments: 
- * IntPtr - pHandle - Managed Pointer variable that represents the device handle     
- * Return: boolean value - true if the device detected is a CH340B or else false
- */
+         * Function Name: CheckIfDeviceIsCh340B
+         * Description: This function checks whether the detected device is a CH340B or other COM port devices
+         * Arguments: 
+         * IntPtr - pHandle - Managed Pointer variable that represents the device handle     
+         * Return: boolean value - true if the device detected is a CH340B or else false
+         */
         private bool CheckIfDeviceIsCh340B(string szComportName)
         {
             bool bResult = false;
@@ -246,7 +248,8 @@ namespace CH340BConfigure
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                    MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
             }
             // Close the device handle
             if (pHandle != IntPtr.Zero && pHandle != Constants.INVALID_HANDLE_VALUE)
@@ -455,12 +458,24 @@ namespace CH340BConfigure
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                    MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
             }
 
             return bResult;
         }
 
+        /* 
+         * Function Name: ReadConfigurationData
+         * Description: This function reads the configuration data from CH340B's EEPROM and returns the data to the caller
+         * Arguments: 
+         * int nSelectedDeviceIndex - index of the selected device - this denotes the index in the device list if 
+         * there are multiple devices found. If there is only one device, then its value would be 0
+         * ref CH340BConfigurationData oCH340BConfigurationData - reference of the object of type CH340BConfigurationData
+         * on returning this function, this oCH340BConfigurationData will have the actual configuration data read from the
+         * chip.
+         * Return: boolean value - true if the read function finishes successfully, else false
+         */
         internal bool ReadConfigurationData(int nSelectedDeviceIndex, ref CH340BConfigurationData oCH340BConfigurationData)
         {
             bool bResult = false;
@@ -472,7 +487,8 @@ namespace CH340BConfigure
                     Constants.FILE_SHARE_READ | Constants.FILE_SHARE_WRITE, IntPtr.Zero, Constants.OPEN_EXISTING, 0, IntPtr.Zero);
                 if (pHandle == IntPtr.Zero || pHandle == Constants.INVALID_HANDLE_VALUE)
                 {
-                    MessageBox.Show("Can't open device for reading configuration data.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                    MessageBox.Show("Can't open device for reading configuration data.", "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                        MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                     return bResult;
                 }
                 // Initialize the vendor interface of the CH340B driver
@@ -584,6 +600,17 @@ namespace CH340BConfigure
             return bResult;
         }
 
+        /* 
+         * Function Name: WriteConfigurationData
+         * Description: This function writes the configuration data to CH340B's EEPROM
+         * Arguments: 
+         * int nSelectedDeviceIndex - index of the selected device - this denotes the index in the device list if 
+         * there are multiple devices found. If there is only one device, then its value would be 0
+         * CH340BConfigurationData oCH340BConfigurationData - reference of the object of type CH340BConfigurationData
+         * this oCH340BConfigurationData will have the actual configuration data that is filled by the caller
+         * chip.
+         * Return: boolean value - true if the write function finishes successfully, else false
+         */
         internal bool WriteConfigurationData(int nSelectedDeviceIndex, CH340BConfigurationData oCH340BConfigurationData)
         {
             bool bResult = false;
