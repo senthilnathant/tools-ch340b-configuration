@@ -607,8 +607,7 @@ namespace CH340BConfigure
          * int nSelectedDeviceIndex - index of the selected device - this denotes the index in the device list if 
          * there are multiple devices found. If there is only one device, then its value would be 0
          * CH340BConfigurationData oCH340BConfigurationData - reference of the object of type CH340BConfigurationData
-         * this oCH340BConfigurationData will have the actual configuration data that is filled by the caller
-         * chip.
+         * this oCH340BConfigurationData will have the actual configuration data that is filled by the caller.
          * Return: boolean value - true if the write function finishes successfully, else false
          */
         internal bool WriteConfigurationData(int nSelectedDeviceIndex, CH340BConfigurationData oCH340BConfigurationData)
