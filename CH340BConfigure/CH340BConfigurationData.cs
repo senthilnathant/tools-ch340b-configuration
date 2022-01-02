@@ -1,41 +1,32 @@
 ﻿// *********************************************************************************************************
 //
 //	   Project      : WCH CH340B Configuration Utility
-//	   FileName     : Program.cs
+//	   FileName     : CH340BConfigurationData.cs
 //	   Author       : SENTHILNATHAN THANGAVEL
 //     Co-Author(s) : 
-//	   Created      : ‎20 December, ‎2021
+//	   Created      : ‎02 January, ‎2022
 //
 // *********************************************************************************************************
 //
 // Module Description
 //
-// IDE generated code - main entry point of the application
+// This class declares the Configuration data such as VID, PID, Product String and Serial number of CH340B
 // *********************************************************************************************************
 //
 // History
 //
 // Date			        Version		Author		                Changes
 //
-// 20 December, ‎2021	1.0.0		SENTHILNATHAN THANGAVEL		Initial version
+// ‎02 January, ‎2022   	1.0.0		SENTHILNATHAN THANGAVEL		Initial version
 //
 // *********************************************************************************************************
-using System;
-using System.Windows.Forms;
-
 namespace CH340BConfigure
 {
-    static class Program
+    public class CH340BConfigurationData
     {
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
-        [STAThread]
-        static void Main()
-        {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new UiForm());
-        }
+        public ushort ushVID;
+        public ushort ushPID;
+        public string szProductString;
+        public string szSerialNumber;
     }
 }
