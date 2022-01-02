@@ -584,7 +584,8 @@ namespace CH340BConfigure
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                    MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
             }
             try
             {
@@ -595,7 +596,8 @@ namespace CH340BConfigure
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                    MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
             }
             return bResult;
         }
@@ -628,7 +630,8 @@ namespace CH340BConfigure
                         Constants.FILE_SHARE_READ | Constants.FILE_SHARE_WRITE, IntPtr.Zero, Constants.OPEN_EXISTING, 0, IntPtr.Zero);
                     if (pHandle == IntPtr.Zero || pHandle == Constants.INVALID_HANDLE_VALUE)
                     {
-                        MessageBox.Show("Can't open device for writing configuration data.", "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                        MessageBox.Show("Can't open device for writing configuration data.", "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                            MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                         break;
                     }
                     InitializeCh340BVendorInterface(pHandle);
@@ -716,7 +719,8 @@ namespace CH340BConfigure
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                    MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                        MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
                 }
 
             } while (false);
@@ -730,7 +734,8 @@ namespace CH340BConfigure
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
+                MessageBox.Show("Exception occurred: " + ex.Message, "CH340B Configuration Utlity", MessageBoxButtons.OK, 
+                    MessageBoxIcon.Exclamation, MessageBoxDefaultButton.Button1);
             }
             return bResult;
         }
