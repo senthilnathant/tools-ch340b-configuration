@@ -2,7 +2,7 @@
 //
 //	   Project      : WCH CH340B Configuration Utility
 //	   FileName     : Program.cs
-//	   Author       : SENTHILNATHAN THANGAVEL
+//	   Author       : SENTHILNATHAN THANGAVEL, INDEPENDENT DEVELOPER
 //     Co-Author(s) : 
 //	   Created      : ‎20 December, ‎2021
 //

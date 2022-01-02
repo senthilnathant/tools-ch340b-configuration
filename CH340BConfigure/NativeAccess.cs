@@ -2,7 +2,7 @@
 //
 //	   Project      : WCH CH340B Configuration Utility
 //	   FileName     : NativeAccess.cs
-//	   Author       : SENTHILNATHAN THANGAVEL
+//	   Author       : SENTHILNATHAN THANGAVEL, INDEPENDENT DEVELOPER
 //     Co-Author(s) : 
 //	   Created      : ‎02 January, ‎2022
 //
